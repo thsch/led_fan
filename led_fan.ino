@@ -1,0 +1,163 @@
+//This sketch fill the I2C EEPROM 24C02 on the LED fan
+//
+//LED on Pin 13 blinks once data transfer is complete
+//
+//Connections required:
+//  Fan     Arduino
+//  Vcc  <---> 5V
+//  GND  <---> GND
+//  PB1  <---> Digital Pin 8
+//  SDA  <---> Analog Pin 4
+//  SCL  <---> Analog Pin 5
+
+#include <Wire.h>
+
+#define I2C_DEVICE 0x50
+#define BOARD_WP 8
+
+#define EFFECT_SHOW        1
+#define EFFECT_FLASHING    5
+#define EFFECT_LEFT_RIGHT  9
+#define EFFECT_BOTTOM_UP  11
+#define EFFECT_ALL        15
+
+// Caution! You have only 16 characters on a page
+byte page1[] = "Hacked LED Fan";
+byte page2[] = {0x03 ,' ' ,0x03 ,' ',0x03 ,' ',0x03 ,' ',0x03 ,' ',0x03 ,' ',0x03 ,' ' ,0x03 ,' '  };
+byte page3[] = "0123456789";
+byte page4[] = "LEFT 2 RIGHT";
+byte page5[] = "BOTTOM - UP";
+byte page6[] = "FLASHING";
+byte page7[] = "ALL EFFECTS";
+
+// empty dump to fill eeprom with defaults
+byte empty_dump[]= {
+  0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00
+ ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00
+ ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00
+ ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00
+ ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00
+ ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00
+ ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00
+ ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00
+ ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00
+ ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00
+ ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x5A ,0x6B ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF
+ ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF
+ ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF
+ ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF
+ ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF
+ ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF ,0xFF
+  };
+
+void setup() {  
+  Wire.begin();
+  Wire.setClock(400000); // we can use the 400kHz mode
+  
+  pinMode(13, OUTPUT);
+  pinMode(BOARD_WP, OUTPUT);
+  digitalWrite(BOARD_WP, LOW);   
+  
+  Serial.begin(9600);
+}
+
+void dump24c02() {
+  int addrPointer = 0;
+  int romLength = 0xff;    // 24c02 - 256x8 bits (256 bytes)
+  byte b = 0;
+  byte r[256];
+
+  Serial.println("-- : 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F");
+  while (addrPointer <= romLength)
+  {
+    if (!(addrPointer % 16)) {
+      Serial.print("\n");
+      if (addrPointer < 16) {
+        Serial.print("0");
+      }
+
+      Serial.print(addrPointer, HEX);
+      Serial.print(" : ");
+    }
+
+    b = i2c_eeprom_read_byte(addrPointer);  
+    addrPointer++;
+    if (b < 0x10) {
+      Serial.print("0");
+    }
+    Serial.print(b, HEX);                               
+    Serial.print(" ");     
+  }
+  Serial.println(" ");
+}
+
+byte i2c_eeprom_read_byte(byte eeaddress ) {
+
+  Wire.beginTransmission(I2C_DEVICE);
+  Wire.write(eeaddress);
+  Wire.endTransmission();
+
+  Wire.requestFrom(I2C_DEVICE, 1);  
+  if (Wire.available()) {
+    return Wire.read();
+  } else {       
+    return 0xff;
+  }
+}
+
+  
+void i2c_eeprom_write_byte(unsigned int eeaddress, byte data ) {
+  digitalWrite(BOARD_WP, LOW);
+  delay(100);
+  int rdata = data;
+  Wire.beginTransmission(I2C_DEVICE);
+  Wire.write((int)(eeaddress)); 
+  Wire.write(rdata);
+  Wire.endTransmission();
+}
+
+int writePage(int addrPointer, byte* text, size_t siz, byte effect) {  
+  i2c_eeprom_write_byte(addrPointer++, ((siz-1)<<4) + effect);
+  for (int i=0; i<siz;i++){
+    i2c_eeprom_write_byte(addrPointer++, text[i]);
+  }
+  return addrPointer;
+}
+
+void writeText() {
+  int addrPointer = 0;
+  int romLength = 0xff;    // 24c02 - 256x8 bits (256 bytes)
+  
+  addrPointer = writePage(addrPointer, page1, sizeof(page1)-1, EFFECT_SHOW);
+  addrPointer = writePage(addrPointer, page2, sizeof(page2)-1, EFFECT_BOTTOM_UP);
+  addrPointer = writePage(addrPointer, page3, sizeof(page3)-1, EFFECT_LEFT_RIGHT);
+  addrPointer = writePage(addrPointer, page4, sizeof(page4)-1, EFFECT_LEFT_RIGHT);
+  addrPointer = writePage(addrPointer, page5, sizeof(page5)-1, EFFECT_BOTTOM_UP);
+  addrPointer = writePage(addrPointer, page6, sizeof(page6)-1, EFFECT_FLASHING);
+  addrPointer = writePage(addrPointer, page7, sizeof(page7)-1, EFFECT_ALL);
+
+  // fill the rest with the dump
+  while (addrPointer <= romLength) { 
+    i2c_eeprom_write_byte(addrPointer, empty_dump[addrPointer]);  
+    addrPointer++;    
+  }
+}
+
+void loop(){
+  Serial.println("EEPROM content before:");
+  dump24c02();
+  delay(500); 
+  Serial.println("writing...");
+  writeText();
+  delay(500);  
+  Serial.println("EEPROM content after:");
+  dump24c02();  
+
+  while(1){
+    digitalWrite(13, HIGH);   // set the LED on
+    delay(1000);              // wait for a second
+    digitalWrite(13, LOW);    // set the LED off
+    delay(1000);              // wait for a second
+  }
+} 
+
